@@ -6,7 +6,7 @@
 # @Email: brintery@gmail.com
 # @Create At: 2019-06-04 22:47:30
 # @Last Modified By: Mindon Gao
-# @Last Modified At: 2019-06-09 22:43:12
+# @Last Modified At: 2019-06-09 22:45:26
 # @Description: This is description.
 
 import pandas as pd
@@ -45,3 +45,4 @@ test_data['SeriousDlqin2yrs'].value_counts()
 # 1. when use one-zero label, model will give value in [0,1] despite it is RF or XGB.
 # 2. when label not one-zero, model will give the predict value which not in [0, 1].
 # in situation 1, it not sure the output of the RF is probability
+# in situation 1, abnormal sample will get a value in [0, 1].
