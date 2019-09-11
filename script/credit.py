@@ -6,30 +6,38 @@
 # @Email: someone@gmail.com
 # @Create At: 2019-02-14 21:32:09
 # @Last Modified By: Mindon Gao
-# @Last Modified At: 2019-06-06 14:58:29
+# @Last Modified At: 2019-09-11 20:53:52
 # @Description: This is description.
 
-
+# %%
 import pandas as pd
+import numpy as np
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.tree import DecisionTreeClassifier
+from reportgen.utils.preprocessing import chimerge
 
-
+# %%
 # read data
 data = pd.read_csv("./data/cs-training.csv")
-data.head()
 
-
+# %%
 # delete useless column
 del data['Unnamed: 0']
 
+# %%
 # see the info
 data.info()
 
+# %%
+"""
+process of null value
+"""
 # full the null value use random forest
 random_df = data.loc[:,
                      "SeriousDlqin2yrs":"NumberOfTime60-89DaysPastDueNotWorse"]
 random_df.head()
 
+# %%
 # create X and Y to full null value use random forest in MonthlyIncome
 # use known value to create X and y, train the random forest,
 # and use the unknow column to predict MonthlyIncome
@@ -61,6 +69,7 @@ data.loc[random_df['MonthlyIncome'].isnull(
 ), 'MonthlyIncome'] = rfr.predict(X_unknown_mth).round(0)
 data.info()
 
+# %%
 # use random forest to fill null value of the column of NumberOfDependents
 random_copy = data.copy()
 random_copy.info()
@@ -86,26 +95,35 @@ data.loc[random_copy['NumberOfDependents'].isnull(
 ), 'NumberOfDependents'] = rfr2.predict(X_unknown_dpd).round(0)
 data.info()
 
-# abnormal value detection
-# analysis of personal information
+# %%
+"""
+process of abnormal value of variables
+"""
+# data backup
 prs_data = data.copy()
 prs_data.info()
 
+# %%
+# abnormal value detection
+# analysis of personal information
 prs_data[['age', 'NumberOfDependents']].describe()
 prs_data['age'].plot(kind='box')
 prs_data['NumberOfDependents'].plot(kind='box')
 
 prs_data = prs_data[(prs_data['age'] >= 21) & (prs_data['age'] <= 100)]
 
+# %%
 # analysis of personal credit information
 prs_data[['RevolvingUtilizationOfUnsecuredLines',
-          'NumberOfOpenCreditLinesAndLoans', 'NumberRealEstateLoansOrLines']].describe()
+          'NumberOfOpenCreditLinesAndLoans',
+          'NumberRealEstateLoansOrLines']].describe()
 prs_data[['NumberOfOpenCreditLinesAndLoans',
           'NumberRealEstateLoansOrLines']].plot(kind='box')
 
 prs_data = prs_data[(prs_data['RevolvingUtilizationOfUnsecuredLines'] >= 0) & (
     prs_data['RevolvingUtilizationOfUnsecuredLines'] <= 1)]
 
+# %%
 # analysis of personal income and liability information variables
 prs_data[['DebtRatio', 'MonthlyIncome']].describe()
 prs_data.loc[prs_data['DebtRatio'] > 5000, 'DebtRatio'].count()
@@ -113,6 +131,7 @@ prs_data.loc[prs_data['DebtRatio'] > 5000, 'DebtRatio'].count()
 prs_data = prs_data[prs_data['DebtRatio'] <= 5000]
 prs_data = prs_data[prs_data['MonthlyIncome'] <= 100000]
 
+# %%
 # analysis of the number of overdue times of borrowers in the past two years
 for column in ['NumberOfTime30-59DaysPastDueNotWorse', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfTimes90DaysLate']:
     prs_data[prs_data[column] > 90] = 0
@@ -125,8 +144,231 @@ prs_data.info()
 ft_data = prs_data.copy()
 ft_data.info()
 
+# %%
 # create variable
 ft_data['Debt'] = ft_data['DebtRatio']*ft_data['MonthlyIncome']
 ft_data['NumberOfPastDue'] = ft_data['NumberOfTime30-59DaysPastDueNotWorse'] + \
     ft_data['NumberOfTimes90DaysLate'] + \
     ft_data['NumberOfTime60-89DaysPastDueNotWorse']
+
+# %%
+"""
+feature engineering
+0. pre feature engineering
+1. bins for continuous and discrete variables
+2. calculate iv information for each variables
+3. calculate corrence for each variables
+4. select variable
+5. woe value for each values
+
+continuous variables:
+age
+RevolvingUtilizationOfUnsecuredLines
+Debt
+DebtRatio
+MonthlyIncome
+
+discrete variables:
+NumberOfDependents
+NumberOfOpenCreditLinesAndLoans
+NumberRealEstateLoansOrLines
+NumberOfTime30-59DaysPastDueNotWorse
+NumberOfTime60-89DaysPastDueNotWorse
+NumberOfTimes90DaysLate
+NumberOfPastDue
+"""
+
+
+def optimal_binning_boundary(x, y, nan=float(-999.)):
+    '''
+    利用决策树获得最优分箱的边界值列表
+
+    Args:
+        x: pd.Series
+        y: pd.Series
+        nan: float
+
+    Returns:
+        boundary: list
+    '''
+    boundary = []  # 待return的分箱边界值列表
+
+    x = x.fillna(nan).values  # 填充缺失值
+    y = y.values
+
+    clf = DecisionTreeClassifier(criterion='entropy',  # “信息熵”最小化准则划分
+                                 max_leaf_nodes=6,       # 最大叶子节点数
+                                 min_samples_leaf=0.05)  # 叶子节点样本数量最小占比
+
+    clf.fit(x.reshape(-1, 1), y)  # 训练决策树
+
+    n_nodes = clf.tree_.node_count
+    children_left = clf.tree_.children_left
+    children_right = clf.tree_.children_right
+    threshold = clf.tree_.threshold
+
+    for i in range(n_nodes):
+        if children_left[i] != children_right[i]:  # 获得决策树节点上的划分边界值
+            boundary.append(threshold[i])
+
+    boundary.sort()
+
+    min_x = x.min()
+    max_x = x.max() + 0.1  # +0.1是为了考虑后续groupby操作时，能包含特征最大值的样本
+    boundary = [min_x] + boundary + [max_x]
+
+    return boundary
+
+
+def feature_woe_iv(x, y, method='chimerge', **kwargs):
+    '''
+    计算变量各个分箱的WOE、IV值，返回一个DataFrame
+
+    Args:
+        x: pd.Series
+        y: pd.Series
+        nan: float
+        method: the method of segment data
+            chimerge: chi square method
+            bestiv: best iv method
+            bestks: best ks method
+        **kwargs: another args of chimerge function
+            max_intervals:
+            threshold:
+            bins:
+            boundary:
+
+    Returns:
+        result_df: pd.Dataframe
+    '''
+    # x = x.fillna(nan)
+    boundary = []
+
+    if method == 'chimerge':
+        boundary = chimerge(x, y,
+                            max_intervals=kwargs['max_intervals'],
+                            threshold=kwargs['threshold'])
+    elif method == 'bestiv':
+        boundary = optimal_binning_boundary(x, y)
+    elif method == 'eqfreq':
+        boundary = list(pd.qcut(x, q=kwargs['bins'], retbins=True)[1])
+        boundary = boundary[0:-1] + [boundary[-1] + 0.1]
+    elif method == 'eqdist':
+        boundary = list(pd.cut(x, bins=kwargs['bins'], retbins=True)[1])
+        boundary = boundary[0:-1] + [boundary[-1] + 0.1]
+    elif method == 'custom':
+        boundary = kwargs['boundary']
+
+    df = pd.concat([x, y], axis=1)
+    df.columns = ['x', 'y']
+    df['bins'] = pd.cut(x=x, bins=boundary, right=False)
+
+    # process NA value to a single bins
+    if df['bins'].isnull().any():
+        df['bins'].cat.add_categories('NA', inplace=True)
+        df['bins'].fillna('NA', inplace=True)
+
+    grouped = df.groupby('bins')['y']
+    result_df = grouped.agg([('good', lambda y: (y == 0).sum()),
+                             ('bad', lambda y: (y == 1).sum()),
+                             ('total', 'count')])
+
+    result_df['good_pct'] = result_df['good'] / \
+        result_df['good'].sum()
+    result_df['bad_pct'] = result_df['bad'] / \
+        result_df['bad'].sum()
+    result_df['total_pct'] = result_df['total'] / \
+        result_df['total'].sum()
+
+    result_df['bad_rate'] = result_df['bad'] / \
+        result_df['total']
+
+    result_df['woe'] = np.log(
+        result_df['good_pct'] / result_df['bad_pct'])
+    result_df['iv'] = (result_df['good_pct'] -
+                       result_df['bad_pct']) * result_df['woe']
+
+    print(f"the variable's IV = {result_df['iv'].sum()}")
+
+    return result_df
+
+
+# %%
+# calculate continues variable's iv
+# init iv result
+iv_result = {}
+
+continues_var = ft_data[['age',
+                         'RevolvingUtilizationOfUnsecuredLines',
+                         'Debt',
+                         'DebtRatio',
+                         'MonthlyIncome']].copy()
+continues_rst = {}
+for key in list(continues_var.keys()):
+    continues_rst[key] = feature_woe_iv(
+        continues_var[key], ft_data['SeriousDlqin2yrs'], method='bestiv')
+    iv_result[key] = continues_rst[key]['iv'].sum()
+
+# %%
+# select discrete variable
+discrete_var = ft_data[['NumberOfDependents',
+                        'NumberOfOpenCreditLinesAndLoans',
+                        'NumberRealEstateLoansOrLines',
+                        'NumberOfTime30-59DaysPastDueNotWorse',
+                        'NumberOfTime60-89DaysPastDueNotWorse',
+                        'NumberOfTimes90DaysLate',
+                        'NumberOfPastDue']].copy()
+discrete_rst = {}
+for key in list(discrete_var.keys()):
+    discrete_rst[key] = feature_woe_iv(
+        discrete_var[key], ft_data['SeriousDlqin2yrs'], method='chimerge',
+        max_intervals=5, threshold=5)
+    iv_result[key] = discrete_rst[key]['iv'].sum()
+
+# %%
+iv_result_df = pd.DataFrame(iv_result, index=['iv']).T.sort_index(by='iv')
+
+# %%
+# correlation analysis
+corr_data = ft_data.loc[:,
+                        'RevolvingUtilizationOfUnsecuredLines':
+                        'NumberOfPastDue'].corr(method='pearson')
+
+for row in range(1, len(corr_data)+1):
+    col = row - 1
+    corr_data.iloc[0:row, col] = None
+
+corr_data = corr_data[(corr_data >= 0.8) | (
+    corr_data <= -0.8)].dropna(how='all').stack().reset_index()
+corr_data.rename(columns={'level_0': 'var1',
+                          'level_1': 'var2', 0: 'corr'}, inplace=True)
+
+
+# %%
+"""
+pre process data
+"""
+woe_data = ft_data.drop(['Debt', 'NumberOfTime30-59DaysPastDueNotWorse'],
+                        axis=1).copy()
+
+var_list = ['RevolvingUtilizationOfUnsecuredLines',
+            'age',
+            'DebtRatio',
+            'MonthlyIncome',
+            'NumberOfOpenCreditLinesAndLoans',
+            'NumberOfTimes90DaysLate',
+            'NumberRealEstateLoansOrLines',
+            'NumberOfTime60-89DaysPastDueNotWorse',
+            'NumberOfDependents',
+            'NumberOfPastDue']
+
+bin_dict = {}
+woe_dict = {}
+
+bin_dict['RevolvingUtilizationOfUnsecuredLines'] = [0.0, 0.115, 0.495, 0.773, 1.1]
+woe_dict['RevolvingUtilizationOfUnsecuredLines'] = [1.22, 0.35, -0.6, -1.27]
+
+bin_dict['age'] = [0.0, 36.5, 52.5, 56.5, 63.5, 67.5, 99.1]
+woe_dict['age'] = [-0.51, -0.24, -0.01, 0.36, 0.71, 1.07]
+
+
