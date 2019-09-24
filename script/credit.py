@@ -6,7 +6,7 @@
 # @Email: someone@gmail.com
 # @Create At: 2019-02-14 21:32:09
 # @Last Modified By: Mindon Gao
-# @Last Modified At: 2019-09-11 20:53:52
+# @Last Modified At: 2019-09-24 21:19:39
 # @Description: This is description.
 
 # %%
@@ -107,8 +107,8 @@ prs_data.info()
 # abnormal value detection
 # analysis of personal information
 prs_data[['age', 'NumberOfDependents']].describe()
-prs_data['age'].plot(kind='box')
-prs_data['NumberOfDependents'].plot(kind='box')
+# prs_data['age'].plot(kind='box')
+# prs_data['NumberOfDependents'].plot(kind='box')
 
 prs_data = prs_data[(prs_data['age'] >= 21) & (prs_data['age'] <= 100)]
 
@@ -117,8 +117,8 @@ prs_data = prs_data[(prs_data['age'] >= 21) & (prs_data['age'] <= 100)]
 prs_data[['RevolvingUtilizationOfUnsecuredLines',
           'NumberOfOpenCreditLinesAndLoans',
           'NumberRealEstateLoansOrLines']].describe()
-prs_data[['NumberOfOpenCreditLinesAndLoans',
-          'NumberRealEstateLoansOrLines']].plot(kind='box')
+# prs_data[['NumberOfOpenCreditLinesAndLoans',
+#           'NumberRealEstateLoansOrLines']].plot(kind='box')
 
 prs_data = prs_data[(prs_data['RevolvingUtilizationOfUnsecuredLines'] >= 0) & (
     prs_data['RevolvingUtilizationOfUnsecuredLines'] <= 1)]
@@ -362,13 +362,27 @@ var_list = ['RevolvingUtilizationOfUnsecuredLines',
             'NumberOfDependents',
             'NumberOfPastDue']
 
-bin_dict = {}
-woe_dict = {}
+bin_dict = {'RevolvingUtilizationOfUnsecuredLines': [0.0, 0.115, 0.495, 0.773, 1.1],
+            'age': [0.0, 36.5, 52.5, 56.5, 63.5, 67.5, 99.1],
+            'DebtRatio': [0.0, 0.0192, 0.654, 5000.1],
+            'MonthlyIncome': [0.0, 2726.5, 4833.5, 100000.1],
+            'NumberOfOpenCreditLinesAndLoans': [-0.01, 1.0, 4.0, 6.0, 58.58],
+            'NumberOfTimes90DaysLate': [-0.01, 1.0, 2.0, 3.0, 4.0, 17.17],
+            'NumberRealEstateLoansOrLines': [-0.01, 3.0, 4.0, 5.0, 8.0, 54.54],
+            'NumberOfTime60-89DaysPastDueNotWorse': [-0.01, 1.0, 2.0, 3.0, 6.0, 11.11],
+            'NumberOfDependents': [-0.01, 1.0, 2.0, 3.0, 6.0, 20.2],
+            'NumberOfPastDue': [-0.01, 1.0, 2.0, 3.0, 19.19]}
 
-bin_dict['RevolvingUtilizationOfUnsecuredLines'] = [0.0, 0.115, 0.495, 0.773, 1.1]
-woe_dict['RevolvingUtilizationOfUnsecuredLines'] = [1.22, 0.35, -0.6, -1.27]
+woe_dict = {'RevolvingUtilizationOfUnsecuredLines': [1.22, 0.35, -0.6, -1.27],
+            'age': [-0.51, -0.24, -0.01, 0.36, 0.71, 1.07],
+            'DebtRatio': [0.38, 0.02, -0.12],
+            'MonthlyIncome': [-0.22, -0.11, 0.18],
+            'NumberOfOpenCreditLinesAndLoans': [-1.54, -0.39, 0.11, 0.11],
+            'NumberOfTimes90DaysLate': [0.35, -2.0, -2.68, -3.01, -3.29],
+            'NumberRealEstateLoansOrLines': [0.03, -0.08, -0.38, -0.9, -1.52],
+            'NumberOfTime60-89DaysPastDueNotWorse': [0.25, -1.85, -2.65, -2.95, -3.21],
+            'NumberOfDependents': [0.16, -0.1, -0.2, -0.35, -0.74],
+            'NumberOfPastDue': [0.85, -0.71, -1.54, -2.42]}
 
-bin_dict['age'] = [0.0, 36.5, 52.5, 56.5, 63.5, 67.5, 99.1]
-woe_dict['age'] = [-0.51, -0.24, -0.01, 0.36, 0.71, 1.07]
 
-
+#%%
