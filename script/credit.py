@@ -6,7 +6,7 @@
 # @Email: someone@gmail.com
 # @Create At: 2019-02-14 21:32:09
 # @Last Modified By: Mindon Gao
-# @Last Modified At: 2019-09-24 21:19:39
+# @Last Modified At: 2019-09-25 20:08:58
 # @Description: This is description.
 
 # %%
@@ -348,7 +348,7 @@ corr_data.rename(columns={'level_0': 'var1',
 """
 pre process data
 """
-woe_data = ft_data.drop(['Debt', 'NumberOfTime30-59DaysPastDueNotWorse'],
+woe_data = ft_data.drop(['Debt', 'NumberOfTime30-59DaysPastDueNotWorse', 'SeriousDlqin2yrs'],
                         axis=1).copy()
 
 var_list = ['RevolvingUtilizationOfUnsecuredLines',
@@ -377,12 +377,19 @@ woe_dict = {'RevolvingUtilizationOfUnsecuredLines': [1.22, 0.35, -0.6, -1.27],
             'age': [-0.51, -0.24, -0.01, 0.36, 0.71, 1.07],
             'DebtRatio': [0.38, 0.02, -0.12],
             'MonthlyIncome': [-0.22, -0.11, 0.18],
-            'NumberOfOpenCreditLinesAndLoans': [-1.54, -0.39, 0.11, 0.11],
+            'NumberOfOpenCreditLinesAndLoans': [-1.54, -0.39, 0.11, 0.12],
             'NumberOfTimes90DaysLate': [0.35, -2.0, -2.68, -3.01, -3.29],
             'NumberRealEstateLoansOrLines': [0.03, -0.08, -0.38, -0.9, -1.52],
             'NumberOfTime60-89DaysPastDueNotWorse': [0.25, -1.85, -2.65, -2.95, -3.21],
             'NumberOfDependents': [0.16, -0.1, -0.2, -0.35, -0.74],
             'NumberOfPastDue': [0.85, -0.71, -1.54, -2.42]}
+
+
+# %%
+woe_data = woe_data.apply(lambda x: pd.cut(x,
+                                           bins=bin_dict[x.name],
+                                           labels=woe_dict[x.name],
+                                           right=False))
 
 
 #%%
