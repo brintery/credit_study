@@ -6,29 +6,33 @@
 # @Email: someone@gmail.com
 # @Create At: 2019-02-14 21:32:09
 # @Last Modified By: Mindon Gao
-# @Last Modified At: 2019-09-25 20:08:58
+# @Last Modified At: 2019-10-23 20:04:31
 # @Description: This is description.
 
-# %%
+
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.tree import DecisionTreeClassifier
 from reportgen.utils.preprocessing import chimerge
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve, auc, f1_score
 
-# %%
+
 # read data
 data = pd.read_csv("./data/cs-training.csv")
 
-# %%
+
 # delete useless column
 del data['Unnamed: 0']
 
-# %%
+
 # see the info
 data.info()
 
-# %%
+
 """
 process of null value
 """
@@ -37,7 +41,7 @@ random_df = data.loc[:,
                      "SeriousDlqin2yrs":"NumberOfTime60-89DaysPastDueNotWorse"]
 random_df.head()
 
-# %%
+
 # create X and Y to full null value use random forest in MonthlyIncome
 # use known value to create X and y, train the random forest,
 # and use the unknow column to predict MonthlyIncome
@@ -69,7 +73,7 @@ data.loc[random_df['MonthlyIncome'].isnull(
 ), 'MonthlyIncome'] = rfr.predict(X_unknown_mth).round(0)
 data.info()
 
-# %%
+
 # use random forest to fill null value of the column of NumberOfDependents
 random_copy = data.copy()
 random_copy.info()
@@ -95,7 +99,7 @@ data.loc[random_copy['NumberOfDependents'].isnull(
 ), 'NumberOfDependents'] = rfr2.predict(X_unknown_dpd).round(0)
 data.info()
 
-# %%
+
 """
 process of abnormal value of variables
 """
@@ -103,7 +107,7 @@ process of abnormal value of variables
 prs_data = data.copy()
 prs_data.info()
 
-# %%
+
 # abnormal value detection
 # analysis of personal information
 prs_data[['age', 'NumberOfDependents']].describe()
@@ -112,7 +116,7 @@ prs_data[['age', 'NumberOfDependents']].describe()
 
 prs_data = prs_data[(prs_data['age'] >= 21) & (prs_data['age'] <= 100)]
 
-# %%
+
 # analysis of personal credit information
 prs_data[['RevolvingUtilizationOfUnsecuredLines',
           'NumberOfOpenCreditLinesAndLoans',
@@ -123,7 +127,7 @@ prs_data[['RevolvingUtilizationOfUnsecuredLines',
 prs_data = prs_data[(prs_data['RevolvingUtilizationOfUnsecuredLines'] >= 0) & (
     prs_data['RevolvingUtilizationOfUnsecuredLines'] <= 1)]
 
-# %%
+
 # analysis of personal income and liability information variables
 prs_data[['DebtRatio', 'MonthlyIncome']].describe()
 prs_data.loc[prs_data['DebtRatio'] > 5000, 'DebtRatio'].count()
@@ -131,7 +135,7 @@ prs_data.loc[prs_data['DebtRatio'] > 5000, 'DebtRatio'].count()
 prs_data = prs_data[prs_data['DebtRatio'] <= 5000]
 prs_data = prs_data[prs_data['MonthlyIncome'] <= 100000]
 
-# %%
+
 # analysis of the number of overdue times of borrowers in the past two years
 for column in ['NumberOfTime30-59DaysPastDueNotWorse', 'NumberOfTime60-89DaysPastDueNotWorse', 'NumberOfTimes90DaysLate']:
     prs_data[prs_data[column] > 90] = 0
@@ -144,14 +148,14 @@ prs_data.info()
 ft_data = prs_data.copy()
 ft_data.info()
 
-# %%
+
 # create variable
 ft_data['Debt'] = ft_data['DebtRatio']*ft_data['MonthlyIncome']
 ft_data['NumberOfPastDue'] = ft_data['NumberOfTime30-59DaysPastDueNotWorse'] + \
     ft_data['NumberOfTimes90DaysLate'] + \
     ft_data['NumberOfTime60-89DaysPastDueNotWorse']
 
-# %%
+
 """
 feature engineering
 0. pre feature engineering
@@ -293,7 +297,6 @@ def feature_woe_iv(x, y, method='chimerge', **kwargs):
     return result_df
 
 
-# %%
 # calculate continues variable's iv
 # init iv result
 iv_result = {}
@@ -309,7 +312,7 @@ for key in list(continues_var.keys()):
         continues_var[key], ft_data['SeriousDlqin2yrs'], method='bestiv')
     iv_result[key] = continues_rst[key]['iv'].sum()
 
-# %%
+
 # select discrete variable
 discrete_var = ft_data[['NumberOfDependents',
                         'NumberOfOpenCreditLinesAndLoans',
@@ -325,10 +328,10 @@ for key in list(discrete_var.keys()):
         max_intervals=5, threshold=5)
     iv_result[key] = discrete_rst[key]['iv'].sum()
 
-# %%
+
 iv_result_df = pd.DataFrame(iv_result, index=['iv']).T.sort_index(by='iv')
 
-# %%
+
 # correlation analysis
 corr_data = ft_data.loc[:,
                         'RevolvingUtilizationOfUnsecuredLines':
@@ -344,7 +347,6 @@ corr_data.rename(columns={'level_0': 'var1',
                           'level_1': 'var2', 0: 'corr'}, inplace=True)
 
 
-# %%
 """
 pre process data
 """
@@ -385,11 +387,55 @@ woe_dict = {'RevolvingUtilizationOfUnsecuredLines': [1.22, 0.35, -0.6, -1.27],
             'NumberOfPastDue': [0.85, -0.71, -1.54, -2.42]}
 
 
-# %%
 woe_data = woe_data.apply(lambda x: pd.cut(x,
                                            bins=bin_dict[x.name],
                                            labels=woe_dict[x.name],
                                            right=False))
 
 
-#%%
+"""
+modeling
+"""
+# define X and y
+X = woe_data.copy()
+y = ft_data['SeriousDlqin2yrs'].copy()
+
+# create train and test data
+X_train, X_test, y_train, y_test = train_test_split(X,
+                                                    y,
+                                                    test_size=0.3,
+                                                    random_state=30)
+
+# training model
+clf = LogisticRegression()
+clf.fit(X_train, y_train)
+
+y_score = clf.predict_proba(X_test)[:, 1]
+y_pred = clf.predict(X_test)
+
+# model validation
+fpr, tpr, thresholds = roc_curve(y_test, y_score)
+print("model ks: %.3f, auc: %.3f, f1_score: %.3f" %
+      (max(abs(tpr-fpr)), auc(fpr, tpr), f1_score(y_test, y_pred)))
+
+
+# draw roc
+plt.figure(1)
+plt.subplot(121)
+plt.plot(fpr, tpr, label='roc curve')
+plt.xlabel('fpr')
+plt.ylabel('tpr')
+plt.title('ROC Curve')
+plt.legend(loc='best')
+plt.show()
+
+# draw ks
+plt.subplot(122)
+plt.plot(fpr, label='fpr')
+plt.plot(tpr, label='tpr')
+plt.plot(abs(fpr-tpr), color='red', label='ks')
+plt.xlabel('propotion')
+plt.ylabel('good/bad')
+plt.title('KS Curve')
+plt.legend(loc='best')
+plt.show()
